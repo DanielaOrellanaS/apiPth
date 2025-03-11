@@ -48,6 +48,10 @@ min_max_dict = {
 def normalize(value, min_val, max_val):
     return (value - min_val) / (max_val - min_val) if max_val != min_val else 0
 
+@app.get("/")
+def home():
+    return {"message": "API funcionando correctamente"}
+
 @app.get("/predict")
 def predict(
     precioopen5: float, precioclose5: float, preciohigh5: float, preciolow5: float, volume5: int,
