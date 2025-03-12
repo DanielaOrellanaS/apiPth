@@ -26,10 +26,10 @@ model.eval()
 
 # Rango de normalización con nombres cortos
 min_max_dict = {
-    "po5": (1.04931, 1.05013), "pc5": (1.04931, 1.05013), "ph5": (1.04931, 1.05013), "pl5": (1.04931, 1.05013), "v5": (610, 995),
-    "po15": (1.04931, 1.05013), "pc15": (1.04931, 1.05013), "ph15": (1.04931, 1.05013), "pl15": (1.04931, 1.05013), "v15": (1461, 3005),
+    "o5": (1.04931, 1.05013), "c5": (1.04931, 1.05013), "h5": (1.04931, 1.05013), "l5": (1.04931, 1.05013), "v5": (610, 995),
+    "o15": (1.04931, 1.05013), "c15": (1.04931, 1.05013), "h15": (1.04931, 1.05013), "l15": (1.04931, 1.05013), "v15": (1461, 3005),
     "r5": (0, 100), "r15": (0, 100),
-    "sm5": (0, 100), "ss5": (0, 100), "sm15": (0, 100), "ss15": (0, 100),
+    "m5": (0, 100), "s5": (0, 100), "m15": (0, 100), "s15": (0, 100),
     "fill": (0, 1)
 }
 
@@ -42,9 +42,9 @@ def home():
 
 @app.get("/predict")
 def predict(
-    po5: float, pc5: float, ph5: float, pl5: float, v5: int,
-    po15: float, pc15: float, ph15: float, pl15: float, v15: int,
-    r5: float, r15: float, sm5: float, ss5: float, sm15: float, ss15: float, fill: int
+    o5: float, c5: float, h5: float, l5: float, v5: int,
+    o15: float, c15: float, h15: float, l15: float, v15: int,
+    r5: float, r15: float, m5: float, s5: float, m15: float, s15: float, fill: int
 ):
     """
     Recibe datos a través de la URL, los normaliza y hace una predicción.
@@ -52,15 +52,15 @@ def predict(
 
     # Crear el diccionario de datos con los valores recibidos
     data = {
-        "po5": po5, "pc5": pc5, "ph5": ph5, "pl5": pl5, "v5": v5,
-        "po15": po15, "pc15": pc15, "ph15": ph15, "pl15": pl15, "v15": v15,
-        "r5": r5, "r15": r15, "sm5": sm5, "ss5": ss5, "sm15": sm15, "ss15": ss15, "fill": fill
+        "o5": o5, "c5": c5, "h5": h5, "l5": l5, "v5": v5,
+        "o15": o15, "c15": c15, "h15": h15, "l15": l15, "v15": v15,
+        "r5": r5, "r15": r15, "m5": m5, "s5": s5, "m15": m15, "s15": s15, "fill": fill
     }
 
     df = pd.DataFrame([data])
 
     # Calcular la diferencia "dif"
-    df['dif'] = abs(df['ph5'] - df['pl5'])
+    df['dif'] = abs(df['h5'] - df['l5'])
 
     # Si "dif" es menor a 0.0005, descartar el dato
     if df['dif'].values[0] <= 0.0005:
