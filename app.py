@@ -44,7 +44,7 @@ def home():
 def predict(
     o5: float, c5: float, h5: float, l5: float, v5: int,
     o15: float, c15: float, h15: float, l15: float, v15: int,
-    r5: float, r15: float, m5: float, s5: float, m15: float, s15: float, fill: int
+    r5: float, r15: float, m5: float, s5: float, m15: float, s15: float, fill: int = 0  # Default fill is 0
 ):
     """
     Recibe datos a través de la URL, los normaliza y hace una predicción.
