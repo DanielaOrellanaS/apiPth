@@ -24,24 +24,12 @@ model = TradingModel()
 model.load_state_dict(torch.load('trading_model.pth'))
 model.eval()
 
-# Rango de normalización (ajusta estos valores según tu dataset real)
+# Rango de normalización con nombres cortos
 min_max_dict = {
-    "precioopen5": (1.04931, 1.05013),
-    "precioclose5": (1.04931, 1.05013),
-    "preciohigh5": (1.04931, 1.05013),
-    "preciolow5": (1.04931, 1.05013),
-    "volume5": (610, 995),
-    "precioopen15": (1.04931, 1.05013),
-    "precioclose15": (1.04931, 1.05013),
-    "preciohigh15": (1.04931, 1.05013),
-    "preciolow15": (1.04931, 1.05013),
-    "volume15": (1461, 3005),
-    "rsi5": (0, 100),
-    "rsi15": (0, 100),
-    "iStochaMain5": (0, 100),
-    "iStochaSign5": (0, 100),
-    "iStochaMain15": (0, 100),
-    "iStochaSign15": (0, 100),
+    "po5": (1.04931, 1.05013), "pc5": (1.04931, 1.05013), "ph5": (1.04931, 1.05013), "pl5": (1.04931, 1.05013), "v5": (610, 995),
+    "po15": (1.04931, 1.05013), "pc15": (1.04931, 1.05013), "ph15": (1.04931, 1.05013), "pl15": (1.04931, 1.05013), "v15": (1461, 3005),
+    "r5": (0, 100), "r15": (0, 100),
+    "sm5": (0, 100), "ss5": (0, 100), "sm15": (0, 100), "ss15": (0, 100),
     "fill": (0, 1)
 }
 
@@ -54,10 +42,9 @@ def home():
 
 @app.get("/predict")
 def predict(
-    precioopen5: float, precioclose5: float, preciohigh5: float, preciolow5: float, volume5: int,
-    precioopen15: float, precioclose15: float, preciohigh15: float, preciolow15: float, volume15: int,
-    rsi5: float, rsi15: float, iStochaMain5: float, iStochaSign5: float, 
-    iStochaMain15: float, iStochaSign15: float, fill: int
+    po5: float, pc5: float, ph5: float, pl5: float, v5: int,
+    po15: float, pc15: float, ph15: float, pl15: float, v15: int,
+    r5: float, r15: float, sm5: float, ss5: float, sm15: float, ss15: float, fill: int
 ):
     """
     Recibe datos a través de la URL, los normaliza y hace una predicción.
@@ -65,16 +52,15 @@ def predict(
 
     # Crear el diccionario de datos con los valores recibidos
     data = {
-        "precioopen5": precioopen5, "precioclose5": precioclose5, "preciohigh5": preciohigh5, "preciolow5": preciolow5, "volume5": volume5,
-        "precioopen15": precioopen15, "precioclose15": precioclose15, "preciohigh15": preciohigh15, "preciolow15": preciolow15, "volume15": volume15,
-        "rsi5": rsi5, "rsi15": rsi15, "iStochaMain5": iStochaMain5, "iStochaSign5": iStochaSign5, 
-        "iStochaMain15": iStochaMain15, "iStochaSign15": iStochaSign15, "fill": fill
+        "po5": po5, "pc5": pc5, "ph5": ph5, "pl5": pl5, "v5": v5,
+        "po15": po15, "pc15": pc15, "ph15": ph15, "pl15": pl15, "v15": v15,
+        "r5": r5, "r15": r15, "sm5": sm5, "ss5": ss5, "sm15": sm15, "ss15": ss15, "fill": fill
     }
 
     df = pd.DataFrame([data])
 
     # Calcular la diferencia "dif"
-    df['dif'] = abs(df['preciohigh5'] - df['preciolow5'])
+    df['dif'] = abs(df['ph5'] - df['pl5'])
 
     # Si "dif" es menor a 0.0005, descartar el dato
     if df['dif'].values[0] <= 0.0005:
