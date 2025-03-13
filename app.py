@@ -64,7 +64,7 @@ def predict(
 
     # Si "dif" es menor a 0.0005, descartar el dato
     if df['dif'].values[0] <= 0.0005:
-        return {"error": "Diferencia muy pequeña, dato descartado."}
+        return {"NADA"}
 
     # Normalizar los valores
     for col in min_max_dict:
