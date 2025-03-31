@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 import torch
 import pandas as pd
 
@@ -19,10 +19,27 @@ class TradingModel(torch.nn.Module):
         x = torch.tanh(self.fc3(x))
         return x
 
-# Cargar el modelo entrenado
-model = TradingModel()
-model.load_state_dict(torch.load('trading_model.pth'))
-model.eval()
+# Cargar múltiples modelos en un diccionario
+models = {
+    "EURUSD": TradingModel(),
+    "GBPAUD": TradingModel(),
+    "BTCUSD": TradingModel(),
+}
+
+models["EURUSD"].load_state_dict(torch.load('trading_model_EURUSD.pth'))
+models["GBPAUD"].load_state_dict(torch.load('trading_model_GBPAUD.pth'))
+models["BTCUSD"].load_state_dict(torch.load('trading_model_BTCUSD.pth'))
+
+# Poner en modo evaluación
+for model in models.values():
+    model.eval()
+
+# Definir umbrales de dif por símbolo
+dif_thresholds = {
+    "EURUSD": 0.0005,
+    "GBPAUD": 0.001,
+    "BTCUSD": 1600,
+}
 
 # Rango de normalización con nombres cortos
 min_max_dict = {
@@ -42,13 +59,18 @@ def home():
 
 @app.get("/predict")
 def predict(
+    symbol: str,  # Nuevo parámetro para elegir el modelo
     o5: float, c5: float, h5: float, l5: float, v5: int,
     o15: float, c15: float, h15: float, l15: float, v15: int,
-    r5: float, r15: float, m5: float, s5: float, m15: float, s15: float, fill: int = 0  # Default fill is 0
+    r5: float, r15: float, m5: float, s5: float, m15: float, s15: float, fill: int = 0
 ):
     """
-    Recibe datos a través de la URL, los normaliza y hace una predicción.
+    Recibe datos a través de la URL, los normaliza y hace una predicción con el modelo del par de divisas seleccionado.
     """
+
+    # Verificar si el símbolo existe en los modelos
+    if symbol not in models:
+        raise HTTPException(status_code=400, detail=f"Modelo no disponible para {symbol}")
 
     # Crear el diccionario de datos con los valores recibidos
     data = {
@@ -62,9 +84,12 @@ def predict(
     # Calcular la diferencia "dif"
     df['dif'] = abs(df['h5'] - df['l5'])
 
-    # Si "dif" es menor a 0.0005, descartar el dato
-    if df['dif'].values[0] <= 0.0005:
-        return {"NADA"}
+    # Obtener el umbral de dif para el símbolo seleccionado
+    dif_threshold = dif_thresholds[symbol]
+
+    # Si "dif" es menor al umbral, descartar el dato
+    if df['dif'].values[0] <= dif_threshold:
+        return {"symbol": symbol, "prediction": "NADA"}
 
     # Normalizar los valores
     for col in min_max_dict:
@@ -73,13 +98,13 @@ def predict(
     # Convertir a tensor
     input_tensor = torch.tensor(df[list(min_max_dict.keys()) + ["dif"]].values, dtype=torch.float32)
 
-    # Hacer la predicción
-    prediction = model(input_tensor).item()
+    # Hacer la predicción con el modelo correcto
+    prediction = models[symbol](input_tensor).item()
 
     # Clasificación de la predicción
     if prediction >= 0.1:
-        return {"prediction": "BUY"}
+        return {"symbol": symbol, "prediction": "BUY"}
     elif prediction <= -0.1:
-        return {"prediction": "SELL"}
+        return {"symbol": symbol, "prediction": "SELL"}
     else:
-        return {"prediction": "NEUTRAL"}
+        return {"symbol": symbol, "prediction": "NEUTRAL"}
