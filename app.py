@@ -1,3 +1,5 @@
+# uvicorn app:app --host 0.0.0.0 --port 8000 --reload
+
 from fastapi import FastAPI, HTTPException
 import torch
 import pandas as pd
@@ -24,11 +26,13 @@ models = {
     "EURUSD": TradingModel(),
     "GBPAUD": TradingModel(),
     "BTCUSD": TradingModel(),
+    "GBPUSD": TradingModel(),
 }
 
 models["EURUSD"].load_state_dict(torch.load('trading_model_EURUSD.pth'))
 models["GBPAUD"].load_state_dict(torch.load('trading_model_GBPAUD.pth'))
 models["BTCUSD"].load_state_dict(torch.load('trading_model_BTCUSD.pth'))
+models["GBPUSD"].load_state_dict(torch.load('trading_model_GBPUSD.pth'))
 
 # Poner en modo evaluación
 for model in models.values():
@@ -37,6 +41,7 @@ for model in models.values():
 # Definir umbrales de dif por símbolo
 dif_thresholds = {
     "EURUSD": 0.0005,
+    "GBPUSD": 0.0005,
     "GBPAUD": 0.001,
     "BTCUSD": 1600,
 }
@@ -59,9 +64,9 @@ def home():
 
 @app.get("/predict")
 def predict(
-    symbol: str,  # Nuevo parámetro para elegir el modelo
-    o5: float, c5: float, h5: float, l5: float, v5: int,
-    o15: float, c15: float, h15: float, l15: float, v15: int,
+    symbol: str,  
+    o5: float, c5: float, h5: float, l5: float, v5: float,  
+    o15: float, c15: float, h15: float, l15: float, v15: float, 
     r5: float, r15: float, m5: float, s5: float, m15: float, s15: float, fill: int = 0
 ):
     """
