@@ -1,5 +1,6 @@
 # uvicorn app:app --host 0.0.0.0 --port 8000 --reload
 
+from fastapi.responses import FileResponse
 from fastapi import FastAPI, HTTPException
 import torch
 import pandas as pd
@@ -117,3 +118,10 @@ def predict(
     updated_df.to_excel(file_name, index=False)
 
     return {"symbol": symbol, "prediction": prediction}
+
+@app.get("/download/{symbol}")
+def download_file(symbol: str):
+    file_path = os.path.join(os.getcwd(), 'Predictions_Files', f"save_predictions_{symbol}.xlsx")
+    if os.path.exists(file_path):
+        return FileResponse(path=file_path, filename=f"save_predictions_{symbol}.xlsx", media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    return {"error": "Archivo no encontrado"}
