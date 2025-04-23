@@ -6,8 +6,17 @@ import torch
 import pandas as pd
 import os
 from datetime import datetime
+import asyncio
 
 app = FastAPI()
+
+# Lock para evitar condiciones de carrera en escrituras simultáneas
+file_locks = {
+    "EURUSD": asyncio.Lock(),
+    "GBPAUD": asyncio.Lock(),
+    "BTCUSD": asyncio.Lock(),
+    "GBPUSD": asyncio.Lock(),
+}
 
 # Definir el modelo de trading
 class TradingModel(torch.nn.Module):
@@ -34,9 +43,8 @@ models = {
 
 for symbol in models:
     model_path = os.path.join('Trading_Model', f'trading_model_{symbol}.pth')
-    models[symbol].load_state_dict(torch.load(model_path))
+    models[symbol].load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
 
-# Poner en modo evaluación
 for model in models.values():
     model.eval()
 
@@ -65,7 +73,7 @@ def home():
     return {"message": "API funcionando correctamente"}
 
 @app.get("/predict")
-def predict(
+async def predict(
     symbol: str,  
     o5: float, c5: float, h5: float, l5: float, v5: float,  
     o15: float, c15: float, h15: float, l15: float, v15: float, 
@@ -75,7 +83,7 @@ def predict(
         raise HTTPException(status_code=400, detail=f"Modelo no disponible para {symbol}")
 
     data = {
-        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), # Guarda fecha y hora
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "symbol": symbol,
         "o5": o5, "c5": c5, "h5": h5, "l5": l5, "v5": v5,
         "o15": o15, "c15": c15, "h15": h15, "l15": l15, "v15": v15,
@@ -109,13 +117,18 @@ def predict(
     os.makedirs(pred_path, exist_ok=True)
     file_name = os.path.join(pred_path, f"save_predictions_{symbol}.xlsx")
 
-    if os.path.exists(file_name):
-        existing_df = pd.read_excel(file_name)
-        updated_df = pd.concat([existing_df, df], ignore_index=True)
-    else:
-        updated_df = df
+    # Bloqueo por símbolo para evitar condiciones de carrera
+    async with file_locks[symbol]:
+        try:
+            if os.path.exists(file_name):
+                existing_df = pd.read_excel(file_name)
+                updated_df = pd.concat([existing_df, df], ignore_index=True)
+            else:
+                updated_df = df
 
-    updated_df.to_excel(file_name, index=False)
+            updated_df.to_excel(file_name, index=False)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error guardando predicción: {str(e)}")
 
     return {"symbol": symbol, "prediction": prediction}
 
