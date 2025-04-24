@@ -16,6 +16,7 @@ file_locks = {
     "GBPAUD": asyncio.Lock(),
     "BTCUSD": asyncio.Lock(),
     "GBPUSD": asyncio.Lock(),
+    "AUDUSD": asyncio.Lock(),
 }
 
 # Definir el modelo de trading
@@ -39,6 +40,7 @@ models = {
     "GBPAUD": TradingModel(),
     "BTCUSD": TradingModel(),
     "GBPUSD": TradingModel(),
+    "AUDUSD": TradingModel(),
 }
 
 for symbol in models:
@@ -52,6 +54,7 @@ for model in models.values():
 dif_thresholds = {
     "EURUSD": 0.0005,
     "GBPUSD": 0.0005,
+    "AUDUSD": 0.0005,
     "GBPAUD": 0.001,
     "BTCUSD": 1600,
 }
