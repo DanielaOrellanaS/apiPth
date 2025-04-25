@@ -112,7 +112,7 @@ async def predict(
         elif raw_pred <= -0.1:
             prediction = "SELL"
         else:
-            prediction = "NEUTRAL"
+            prediction = "NADA"
 
     df['prediction'] = prediction
 
