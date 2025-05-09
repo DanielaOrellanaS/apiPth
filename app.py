@@ -58,7 +58,7 @@ dif_thresholds = {
     "GBPUSD": 0.0005,
     "AUDUSD": 0.0005,
     "GBPAUD": 0.001,
-    "BTCUSD": 1600,
+    "BTCUSD": 500,
 }
 
 # Rango de normalización con nombres cortos
