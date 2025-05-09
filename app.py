@@ -5,8 +5,10 @@ from fastapi import FastAPI, HTTPException
 import torch
 import pandas as pd
 import os
+import re
 from datetime import datetime
 import asyncio
+from fastapi import UploadFile, File
 
 app = FastAPI()
 
@@ -141,3 +143,31 @@ def download_file(symbol: str):
     if os.path.exists(file_path):
         return FileResponse(path=file_path, filename=f"save_predictions_{symbol}.xlsx", media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     return {"error": "Archivo no encontrado"}
+
+@app.post("/upload")
+async def upload_file(file: UploadFile = File(...)):
+    try:
+        filename = file.filename
+        # Extraer símbolo del nombre del archivo (ej. Data_EURUSD_2025-05-09.xlsx → EURUSD)
+        match = re.search(r"([A-Z]{6})_", filename)
+        if not match:
+            raise HTTPException(status_code=400, detail="El nombre del archivo no contiene un par válido (AUDUSD, BTCUSD, etc.)")
+
+        symbol = match.group(1)
+        if symbol not in models:
+            raise HTTPException(status_code=400, detail=f"El símbolo {symbol} no está permitido.")
+
+        # Guardar todos en una única carpeta Uploaded_Files (sin subcarpetas por símbolo)
+        upload_path = os.path.join(os.getcwd(), 'Uploaded_Files')
+        os.makedirs(upload_path, exist_ok=True)
+        save_path = os.path.join(upload_path, filename)
+
+        # Guardar el archivo en disco
+        with open(save_path, "wb") as f:
+            content = await file.read()
+            f.write(content)
+
+        return {"message": f"✅ Archivo {filename} guardado exitosamente en Uploaded_Files/."}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"❌ Error al guardar archivo: {str(e)}")
