@@ -19,6 +19,7 @@ file_locks = {
     "BTCUSD": asyncio.Lock(),
     "GBPUSD": asyncio.Lock(),
     "AUDUSD": asyncio.Lock(),
+    "US30": asyncio.Lock(),
 }
 
 # Definir el modelo de trading
@@ -43,6 +44,7 @@ models = {
     "BTCUSD": TradingModel(),
     "GBPUSD": TradingModel(),
     "AUDUSD": TradingModel(),
+    "US30": TradingModel(),
 }
 
 for symbol in models:
@@ -59,6 +61,7 @@ dif_thresholds = {
     "AUDUSD": 0.0005,
     "GBPAUD": 0.001,
     "BTCUSD": 500,
+    "US30": 100,
 }
 
 # Rango de normalización con nombres cortos
