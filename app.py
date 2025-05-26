@@ -75,9 +75,9 @@ thresholds.update({
     "AUDUSD": 0.0005,
     "GBPAUD": 0.001,
     "BTCUSD": 500,
-    "US30": 100,
-    "GER40": 100,
-    "NAS100": 100,
+    "US30": 50,
+    "GER40": 70,
+    "NAS100": 50,
 })
 
 min_max_dict = {
@@ -170,21 +170,3 @@ def download(symbol: str):
         return FileResponse(path, filename=os.path.basename(path), media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
     return {"error": "Archivo no encontrado"}
 
-@app.post("/upload")
-async def upload(file: UploadFile = File(...)):
-    try:
-        filename = file.filename
-        match = re.search(r"([A-Z]{6})_", filename)
-        if not match:
-            raise HTTPException(status_code=400, detail="El nombre del archivo no contiene un símbolo válido.")
-        symbol = match.group(1)
-        if symbol not in models:
-            raise HTTPException(status_code=400, detail=f"Símbolo {symbol} no soportado.")
-
-        path = os.path.join("Uploaded_Files")
-        os.makedirs(path, exist_ok=True)
-        with open(os.path.join(path, filename), "wb") as f:
-            f.write(await file.read())
-        return {"message": f"✅ Archivo {filename} guardado en Uploaded_Files/"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error al guardar archivo: {str(e)}")
