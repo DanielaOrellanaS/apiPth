@@ -179,7 +179,7 @@ async def upload_real_prediction(file: UploadFile = File(...)):
     # Validar formato del nombre del archivo
     match = re.match(r"Data_([A-Z]+)_(\d{4}-\d{2}-\d{2})\.xlsx", file.filename)
     if not match:
-        raise HTTPException(status_code=400, detail="Nombre de archivo inválido. Debe ser TX_<SIMBOLO>_<YYYY-MM-DD>.xlsx")
+        raise HTTPException(status_code=400, detail="Nombre de archivo inválido. Debe ser Data_<SIMBOLO>_<YYYY-MM-DD>.xlsx")
 
     # Directorio de destino temporal
     dest_dir = "/tmp/Real_Predictions"
@@ -195,3 +195,61 @@ async def upload_real_prediction(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=f"No se pudo guardar el archivo: {str(e)}")
 
     return {"message": f"Archivo {file.filename} guardado correctamente en {dest_dir}"}
+
+@app.post("/feedback/{symbol}")
+async def feedback(symbol: str):
+    symbol = symbol.upper()
+    pred_path = os.path.join("Predictions_Files", f"save_predictions_{symbol}.xlsx")
+    real_dir = "/tmp/Real_Predictions"
+
+    # Buscar archivo real que coincida con el símbolo
+    real_file = None
+    for f in os.listdir(real_dir):
+        if f.startswith(f"Data_{symbol}_") and f.endswith(".xlsx"):
+            real_file = os.path.join(real_dir, f)
+            break
+
+    if not os.path.exists(pred_path):
+        raise HTTPException(status_code=404, detail=f"No se encontró archivo de predicciones para {symbol}")
+
+    if not real_file or not os.path.exists(real_file):
+        raise HTTPException(status_code=404, detail=f"No se encontró archivo real para {symbol} en {real_dir}")
+
+    try:
+        pred_df = pd.read_excel(pred_path)
+        real_df = pd.read_excel(real_file)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error leyendo archivos: {str(e)}")
+
+    # Unir por timestamp (o columna similar)
+    merged = pd.merge(pred_df, real_df, on="timestamp", suffixes=("_pred", "_real"))
+
+    # Codificar la columna tipo_real como valor numérico para feedback
+    label_map = {"BUY": 0.9, "SELL": -0.9, "NADA": 0.0}
+    merged["target"] = merged["prediction_real"].map(label_map)
+
+    # Normalizar de nuevo los datos (usando las mismas columnas que en predict)
+    input_cols = list(min_max_dict.keys())
+    for col in input_cols:
+        merged[col] = merged[col].apply(lambda x: normalize(x, *min_max_dict[col]))
+
+    X = torch.tensor(merged[input_cols].values, dtype=torch.float32)
+    y = torch.tensor(merged["target"].values.reshape(-1, 1), dtype=torch.float32)
+
+    # Reentrenar el modelo con errores
+    model = models[symbol]
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.0005)
+    loss_fn = torch.nn.MSELoss()
+
+    for epoch in range(10):  # Entrenamiento corto, puede ajustarse
+        model.train()
+        optimizer.zero_grad()
+        outputs = model(X)
+        loss = loss_fn(outputs, y)
+        loss.backward()
+        optimizer.step()
+
+    # Guardar el modelo actualizado
+    torch.save(model.state_dict(), f'Trading_Model/trading_model_{symbol}.pth')
+
+    return {"message": f"Modelo {symbol} reentrenado con éxito usando feedback diario."}
