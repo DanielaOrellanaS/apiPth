@@ -171,13 +171,13 @@ def download(symbol: str):
     return {"error": "Archivo no encontrado"}
 
 
-@app.post("/upload_real_prediction")
+@app.post("/upload")
 async def upload_real_prediction(file: UploadFile = File(...)):
     if not file.filename.endswith(".xlsx"):
         raise HTTPException(status_code=400, detail="Solo se permiten archivos .xlsx")
 
     # Validar formato del nombre del archivo
-    match = re.match(r"TX_([A-Z]+)_(\d{4}-\d{2}-\d{2})\.xlsx", file.filename)
+    match = re.match(r"Data_([A-Z]+)_(\d{4}-\d{2}-\d{2})\.xlsx", file.filename)
     if not match:
         raise HTTPException(status_code=400, detail="Nombre de archivo inválido. Debe ser TX_<SIMBOLO>_<YYYY-MM-DD>.xlsx")
 
