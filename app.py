@@ -170,3 +170,28 @@ def download(symbol: str):
         return FileResponse(path, filename=os.path.basename(path), media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
     return {"error": "Archivo no encontrado"}
 
+
+@app.post("/upload_real_prediction")
+async def upload_real_prediction(file: UploadFile = File(...)):
+    if not file.filename.endswith(".xlsx"):
+        raise HTTPException(status_code=400, detail="Solo se permiten archivos .xlsx")
+
+    # Validar formato del nombre del archivo
+    match = re.match(r"TX_([A-Z]+)_(\d{4}-\d{2}-\d{2})\.xlsx", file.filename)
+    if not match:
+        raise HTTPException(status_code=400, detail="Nombre de archivo inválido. Debe ser TX_<SIMBOLO>_<YYYY-MM-DD>.xlsx")
+
+    # Directorio de destino temporal
+    dest_dir = "/tmp/Real_Predictions"
+    os.makedirs(dest_dir, exist_ok=True)
+
+    save_path = os.path.join(dest_dir, file.filename)
+
+    try:
+        with open(save_path, "wb") as f:
+            contents = await file.read()
+            f.write(contents)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"No se pudo guardar el archivo: {str(e)}")
+
+    return {"message": f"Archivo {file.filename} guardado correctamente en {dest_dir}"}
