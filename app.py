@@ -9,6 +9,23 @@ import re
 from datetime import datetime
 import asyncio
 from asyncio import Lock
+import io
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseDownload
+import torch.nn as nn   
+from torch.utils.data import TensorDataset, DataLoader
+from googleapiclient.http import MediaFileUpload
+
+
+SERVICE_ACCOUNT_FILE = 'credentials.json'
+FOLDER_ID = '1PtmUJhIpBVpvQ_FHhmxPJUkzj0wAtUQp'
+
+creds = service_account.Credentials.from_service_account_file(
+    SERVICE_ACCOUNT_FILE,
+    scopes=['https://www.googleapis.com/auth/drive']
+)
+service = build('drive', 'v3', credentials=creds)
 
 app = FastAPI()
 
@@ -170,86 +187,176 @@ def download(symbol: str):
         return FileResponse(path, filename=os.path.basename(path), media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
     return {"error": "Archivo no encontrado"}
 
-
-@app.post("/upload")
-async def upload_real_prediction(file: UploadFile = File(...)):
-    if not file.filename.endswith(".xlsx"):
-        raise HTTPException(status_code=400, detail="Solo se permiten archivos .xlsx")
-
-    # Validar formato del nombre del archivo
-    match = re.match(r"Data_([A-Z]+)_(\d{4}-\d{2}-\d{2})\.xlsx", file.filename)
-    if not match:
-        raise HTTPException(status_code=400, detail="Nombre de archivo inválido. Debe ser Data_<SIMBOLO>_<YYYY-MM-DD>.xlsx")
-
-    # Directorio de destino temporal
-    dest_dir = "/tmp/Real_Predictions"
-    os.makedirs(dest_dir, exist_ok=True)
-
-    save_path = os.path.join(dest_dir, file.filename)
-
+@app.post("/upload/{symbol}")
+def upload_prediction_file(symbol: str):
     try:
-        with open(save_path, "wb") as f:
-            contents = await file.read()
-            f.write(contents)
+        # Ruta donde se guarda el archivo en Render
+        file_path = os.path.join("Predictions_Files", f"save_predictions_{symbol}.xlsx")
+        
+        if not os.path.exists(file_path):
+            return {"status": "error", "message": f"No se encontró el archivo {file_path}"}
+        
+        # Nombre final en Google Drive
+        fecha_actual = datetime.now().strftime("%Y-%m-%d")
+        file_name = f"save_predictions_{symbol}.xlsx"
+        
+        # Crear objeto de subida
+        media = MediaFileUpload(file_path, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+        # Subir a Google Drive
+        file_metadata = {
+            'name': file_name,
+            'parents': [FOLDER_ID]
+        }
+        uploaded_file = service.files().create(
+            body=file_metadata,
+            media_body=media,
+            fields='id'
+        ).execute()
+
+        return {
+            "status": "success",
+            "message": f"Archivo {file_name} subido correctamente a Drive",
+            "file_id": uploaded_file.get("id")
+        }
+
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"No se pudo guardar el archivo: {str(e)}")
+        return {"status": "error", "message": str(e)}
 
-    return {"message": f"Archivo {file.filename} guardado correctamente en {dest_dir}"}
 
-@app.post("/feedback/{symbol}")
-async def feedback(symbol: str):
-    symbol = symbol.upper()
-    pred_path = os.path.join("Predictions_Files", f"save_predictions_{symbol}.xlsx")
-    real_dir = "/tmp/Real_Predictions"
+def find_drive_file(symbol: str, target_date: str):
+    query = f"'{FOLDER_ID}' in parents and name contains 'TX_{symbol}_{target_date}'"
+    results = service.files().list(q=query, fields="files(id, name)").execute()
+    files = results.get('files', [])
+    return files[0] if files else None
 
-    # Buscar archivo real que coincida con el símbolo
-    real_file = None
-    for f in os.listdir(real_dir):
-        if f.startswith(f"Data_{symbol}_") and f.endswith(".xlsx"):
-            real_file = os.path.join(real_dir, f)
-            break
+def download_drive_file(file_id: str, destination_path: str):
+    request = service.files().get_media(fileId=file_id)
+    fh = io.FileIO(destination_path, 'wb')
+    downloader = MediaIoBaseDownload(fh, request)
+    done = False
+    while not done:
+        status, done = downloader.next_chunk()
 
-    if not os.path.exists(pred_path):
-        raise HTTPException(status_code=404, detail=f"No se encontró archivo de predicciones para {symbol}")
+class TradingMLP(nn.Module):
+    def __init__(self, input_dim):
+        super(TradingMLP, self).__init__()
+        self.fc = nn.Sequential(
+            nn.Linear(input_dim, 64),
+            nn.ReLU(),
+            nn.Linear(64, 1),
+            nn.Tanh()
+        )
 
-    if not real_file or not os.path.exists(real_file):
-        raise HTTPException(status_code=404, detail=f"No se encontró archivo real para {symbol} en {real_dir}")
+    def forward(self, x):
+        return self.fc(x)
 
+def get_model_path(symbol: str) -> str:
+    base_path = r"C:\Users\user\OneDrive\Documentos\Trading\ModelPth\apiPth\Trading_Model"
+    return os.path.join(base_path, f"trading_model_{symbol}.pth")
+
+def normalize_inputs(df, feature_cols):
+    # Aquí usa tu método de normalización actual, por ahora lo mantengo como min-max 0-1
+    for col in feature_cols:
+        min_val = df[col].min()
+        max_val = df[col].max()
+        if min_val != max_val:
+            df[col] = (df[col] - min_val) / (max_val - min_val)
+        else:
+            df[col] = 0
+    return df
+
+@app.get("/feedback/{symbol}")
+def feedback(symbol: str):
+    today = datetime.now().strftime('%Y-%m-%d')
+    pred_filename = f"save_predictions_{symbol}.xlsx"
+    real_filename = f"Data_{symbol}_{today}.xlsx"
+
+    # Función auxiliar para descargar desde Drive
+    def download_from_drive(file_name: str, local_path: str):
+        query = f"'{FOLDER_ID}' in parents and name = '{file_name}'"
+        results = service.files().list(q=query, fields="files(id, name)").execute()
+        files = results.get('files', [])
+        if not files:
+            raise HTTPException(status_code=404, detail=f"No se encontró {file_name} en Google Drive")
+        file_id = files[0]['id']
+        request = service.files().get_media(fileId=file_id)
+        fh = io.FileIO(local_path, 'wb')
+        downloader = MediaIoBaseDownload(fh, request)
+        done = False
+        while not done:
+            _, done = downloader.next_chunk()
+
+    # Descargar ambos archivos
+    pred_local = f"temp_{pred_filename}"
+    real_local = f"temp_{real_filename}"
+    download_from_drive(pred_filename, pred_local)
+    download_from_drive(real_filename, real_local)
+
+    # Leer archivos
     try:
-        pred_df = pd.read_excel(pred_path)
-        real_df = pd.read_excel(real_file)
+        pred_df = pd.read_excel(pred_local)
+        real_df = pd.read_excel(real_local)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error leyendo archivos: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error al leer archivos: {e}")
 
-    # Unir por timestamp (o columna similar)
-    merged = pd.merge(pred_df, real_df, on="timestamp", suffixes=("_pred", "_real"))
+    # Preparar y comparar
+    real_df = real_df.rename(columns={"simbolo": "symbol"})
+    merged = pd.merge(pred_df, real_df, on="symbol", suffixes=("_pred", "_real"))
 
-    # Codificar la columna tipo_real como valor numérico para feedback
-    label_map = {"BUY": 0.9, "SELL": -0.9, "NADA": 0.0}
-    merged["target"] = merged["prediction_real"].map(label_map)
+    if 'tipo' not in merged.columns or 'prediction' not in merged.columns:
+        raise HTTPException(status_code=400, detail="Faltan columnas clave para feedback.")
 
-    # Normalizar de nuevo los datos (usando las mismas columnas que en predict)
-    input_cols = list(min_max_dict.keys())
-    for col in input_cols:
-        merged[col] = merged[col].apply(lambda x: normalize(x, *min_max_dict[col]))
+    merged = merged.dropna(subset=['prediction', 'tipo'])
+    merged = merged[merged['prediction'].round(1) != merged['tipo'].round(1)]
 
-    X = torch.tensor(merged[input_cols].values, dtype=torch.float32)
-    y = torch.tensor(merged["target"].values.reshape(-1, 1), dtype=torch.float32)
+    if merged.empty:
+        return {
+            "symbol": symbol,
+            "date": today,
+            "total_predictions": len(pred_df),
+            "incorrect_predictions": 0,
+            "accuracy": 100.0,
+            "retrained": False
+        }
 
-    # Reentrenar el modelo con errores
-    model = models[symbol]
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.0005)
-    loss_fn = torch.nn.MSELoss()
+    # Reentrenamiento
+    feature_cols = [col for col in pred_df.columns if col not in ['timestamp', 'symbol', 'prediction', 'dif']]
+    merged = normalize_inputs(merged, feature_cols)
 
-    for epoch in range(10):  # Entrenamiento corto, puede ajustarse
-        model.train()
-        optimizer.zero_grad()
-        outputs = model(X)
-        loss = loss_fn(outputs, y)
-        loss.backward()
-        optimizer.step()
+    X = merged[feature_cols].values.astype('float32')
+    y = merged['tipo'].values.astype('float32').reshape(-1, 1)
 
-    # Guardar el modelo actualizado
-    torch.save(model.state_dict(), f'Trading_Model/trading_model_{symbol}.pth')
+    model_path = get_model_path(symbol)
+    model = TradingMLP(input_dim=len(feature_cols))
+    model.load_state_dict(torch.load(model_path))
+    model.train()
 
-    return {"message": f"Modelo {symbol} reentrenado con éxito usando feedback diario."}
+    criterion = nn.MSELoss()
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+
+    dataset = TensorDataset(torch.tensor(X), torch.tensor(y))
+    loader = DataLoader(dataset, batch_size=16, shuffle=True)
+
+    for epoch in range(10):
+        for xb, yb in loader:
+            optimizer.zero_grad()
+            pred = model(xb)
+            loss = criterion(pred, yb)
+            loss.backward()
+            optimizer.step()
+
+    torch.save(model.state_dict(), model_path)
+
+    # Limpiar temporales
+    os.remove(pred_local)
+    os.remove(real_local)
+
+    return {
+        "symbol": symbol,
+        "date": today,
+        "total_predictions": len(pred_df),
+        "incorrect_predictions": len(merged),
+        "accuracy": round(100 * (1 - len(merged) / len(pred_df)), 2),
+        "retrained": True
+    }
