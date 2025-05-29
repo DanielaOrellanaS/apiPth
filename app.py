@@ -17,8 +17,18 @@ import torch.nn as nn
 from torch.utils.data import TensorDataset, DataLoader
 from googleapiclient.http import MediaFileUpload
 
+def get_credentials_path():
+    render_secret_path = '/etc/secrets/credentials.json'
+    local_path = 'credentials.json'
+    
+    if os.path.exists(render_secret_path):
+        return render_secret_path
+    elif os.path.exists(local_path):
+        return local_path
+    else:
+        raise FileNotFoundError("No se encontró el archivo credentials.json ni en /etc/secrets/ ni en el directorio actual")
 
-SERVICE_ACCOUNT_FILE = 'credentials.json'
+SERVICE_ACCOUNT_FILE = get_credentials_path()
 FOLDER_ID = '1PtmUJhIpBVpvQ_FHhmxPJUkzj0wAtUQp'
 
 creds = service_account.Credentials.from_service_account_file(
