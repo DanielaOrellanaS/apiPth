@@ -1,2 +1,2 @@
 "credentials.json" 
-echo "credentials.json" >> .gitignore
+echo "credentials.json" >> .gitignore"credentials.json" 
