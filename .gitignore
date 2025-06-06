@@ -1,2 +1,5 @@
 "credentials.json" 
-echo "credentials.json" >> .gitignore"credentials.json" 
+echo "credentials.json" >> .gitignore
+__pycache__/
+*.pyc
+credentials.json

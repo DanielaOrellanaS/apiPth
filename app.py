@@ -82,7 +82,7 @@ thresholds = {}
 # Modelo 18 features
 for sym in forex_symbols:
     model = TradingModel18()
-    model.load_state_dict(torch.load(f'Trading_Model/trading_model_{sym}.pth', map_location='cpu'))
+    model.load_state_dict(torch.load(f'Trading_Model/trading_model_{sym}_back.pth', map_location='cpu'))
     model.eval()
     models[sym] = model
     locks[sym] = asyncio.Lock()
@@ -90,7 +90,7 @@ for sym in forex_symbols:
 # Modelo 19 features
 for sym in index_symbols:
     model = TradingModel19()
-    model.load_state_dict(torch.load(f'Trading_Model/trading_model_{sym}.pth', map_location='cpu'))
+    model.load_state_dict(torch.load(f'Trading_Model/trading_model_{sym}_back.pth', map_location='cpu'))
     model.eval()
     models[sym] = model
     locks[sym] = asyncio.Lock()
