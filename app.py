@@ -1,32 +1,15 @@
 # uvicorn app:app --host 0.0.0.0 --port 8000 --reload
-
-from fastapi import FastAPI, HTTPException, UploadFile, File
-from fastapi.responses import FileResponse
-import torch
-import pandas as pd
-import os
-import re
-from datetime import datetime
-import asyncio
-from asyncio import Lock
-import io
-from google.oauth2 import service_account
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaIoBaseDownload
-import torch.nn as nn   
-from torch.utils.data import TensorDataset, DataLoader
-from googleapiclient.http import MediaFileUpload
-
+# api_clean.py
 
 from fastapi import FastAPI, HTTPException
 import torch
 import pandas as pd
-import os
 from datetime import datetime
 import asyncio
-import torch.nn as nn
 
 app = FastAPI()
+
+# ======================= MODELOS Y CONFIGURACIÓN ==========================
 
 class TradingModel18(torch.nn.Module):
     def __init__(self):
@@ -62,27 +45,18 @@ all_symbols = forex_symbols + index_symbols
 
 models = {}
 locks = {}
-threshholds = {
-    "EURUSD": 0.0005,
-    "GBPUSD": 0.0005,
-    "AUDUSD": 0.0005,
-    "GBPAUD": 0.001,
-    "BTCUSD": 500,
-    "US30": 50,
-    "GER40": 70,
-    "NAS100": 50,
+thresh = {
+    "EURUSD": 0.0005, "GBPUSD": 0.0005, "AUDUSD": 0.0005, "GBPAUD": 0.001, "BTCUSD": 500,
+    "US30": 50, "GER40": 70, "NAS100": 50,
 }
 
-# Diccionario normalizador
 min_max_dict = {
     "o5": (1.04931, 1.05013), "c5": (1.04931, 1.05013), "h5": (1.04931, 1.05013), "l5": (1.04931, 1.05013), "v5": (610, 995),
     "o15": (1.04931, 1.05013), "c15": (1.04931, 1.05013), "h15": (1.04931, 1.05013), "l15": (1.04931, 1.05013), "v15": (1461, 3005),
-    "r5": (0, 100), "r15": (0, 100), "m5": (0, 100), "s5": (0, 100), "m15": (0, 100), "s15": (0, 100),
+    "r5": (0, 100), "r15": (0, 100),
+    "m5": (0, 100), "s5": (0, 100), "m15": (0, 100), "s15": (0, 100),
     "fill": (0, 1), "dif": (0, 100)
 }
-
-def normalize(value, min_val, max_val):
-    return (value - min_val) / (max_val - min_val) if max_val != min_val else 0
 
 for sym in forex_symbols:
     model = TradingModel18()
@@ -98,9 +72,16 @@ for sym in index_symbols:
     models[sym] = model
     locks[sym] = asyncio.Lock()
 
+# ======================= UTILIDADES ==========================
+
+def normalize(val, min_val, max_val):
+    return (val - min_val) / (max_val - min_val) if max_val != min_val else 0
+
+# ======================= ENDPOINT ============================
+
 @app.get("/")
 def home():
-    return {"message": "API funcionando sin escritura de archivos"}
+    return {"message": "API limpia funcionando correctamente"}
 
 @app.get("/predict")
 async def predict(
@@ -118,13 +99,13 @@ async def predict(
         "o5": o5, "c5": c5, "h5": h5, "l5": l5, "v5": v5,
         "o15": o15, "c15": c15, "h15": h15, "l15": l15, "v15": v15,
         "r5": r5, "r15": r15, "m5": m5, "s5": s5, "m15": m15, "s15": s15,
-        "fill": fill,
+        "fill": fill
     }
 
     df = pd.DataFrame([data])
     df["dif"] = abs(df["h5"] - df["l5"])
 
-    if df["dif"].values[0] <= threshholds[symbol]:
+    if df["dif"].values[0] <= thresh[symbol]:
         prediction = "NADA"
     else:
         for col in min_max_dict:
@@ -132,6 +113,7 @@ async def predict(
 
         input_cols = list(min_max_dict.keys())
         input_tensor = torch.tensor(df[input_cols].values, dtype=torch.float32)
+
         raw_pred = model(input_tensor).item()
 
         if raw_pred >= 0.1:
@@ -141,8 +123,4 @@ async def predict(
         else:
             prediction = "NADA"
 
-    return {
-        "timestamp": datetime.now().isoformat(),
-        "symbol": symbol,
-        "prediction": prediction
-    }
+    return {"symbol": symbol, "prediction": prediction}
